@@ -1,5 +1,5 @@
 {
-  "name": "backend",
+  "name": "blogsphere-backend",
   "version": "1.0.0",
   "description": "BlogSphere Backend API",
   "main": "server.js",
@@ -8,7 +8,7 @@
     "dev": "nodemon server.js"
   },
   "engines": {
-    "node": ">=20.0.0 <22.0.0"
+    "node": "18.x"
   },
   "dependencies": {
     "express": "^4.18.2",

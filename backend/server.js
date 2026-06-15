@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -8,6 +9,10 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Serve static files from uploads folder
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
@@ -15,34 +20,27 @@ app.use('/api/blogs', require('./routes/blogs'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/upload', require('./routes/upload'));
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
+// Health check endpoint for Railway
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', message: 'BlogSphere API is running' });
 });
 
-// MongoDB connection for serverless
-let cachedDb = null;
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({ message: 'Welcome to BlogSphere API' });
+});
 
-async function connectToDatabase() {
-  if (cachedDb) {
-    return cachedDb;
-  }
-  
-  const conn = await mongoose.connect(process.env.MONGODB_URI);
-  cachedDb = conn;
-  return conn;
-}
+// Connect to MongoDB
+const PORT = process.env.PORT || 5000;
 
-// Vercel serverless handler
-module.exports = async (req, res) => {
-  await connectToDatabase();
-  app(req, res);
-};
-
-// For local development
-if (process.env.NODE_ENV !== 'production') {
-  const PORT = process.env.PORT || 5000;
-  connectToDatabase().then(() => {
-    app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => {
+    console.log('✅ MongoDB connected successfully');
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+    });
+  })
+  .catch(err => {
+    console.error('❌ MongoDB connection error:', err);
+    process.exit(1);
   });
-}
