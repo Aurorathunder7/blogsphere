@@ -1,6 +1,7 @@
 const router = require('express').Router();
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const supabase = require('../config/supabase');
 
 // Register
 router.post('/register', async (req, res) => {
@@ -8,30 +9,45 @@ router.post('/register', async (req, res) => {
     const { username, email, password } = req.body;
     
     // Check if user exists
-    let user = await User.findOne({ $or: [{ email }, { username }] });
-    if (user) {
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('id')
+      .or(`email.eq.${email},username.eq.${username}`)
+      .single();
+    
+    if (existingUser) {
       return res.status(400).json({ msg: 'User already exists' });
     }
     
-    // Create new user
-    user = new User({ username, email, password });
-    await user.save();
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
     
-    // Create token
-    const payload = { user: { id: user.id } };
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
+    // Create user in Supabase
+    const { data: newUser, error } = await supabase
+      .from('users')
+      .insert([{ username, email, password: hashedPassword }])
+      .select()
+      .single();
     
-    // Return token and user data
-    res.json({ 
-      token, 
-      user: { 
-        id: user.id, 
-        username: user.username, 
-        email: user.email,
-        bio: user.bio || '',
-        avatar: user.avatar || '',
-        createdAt: user.createdAt
-      } 
+    if (error) throw error;
+    
+    // Create JWT token
+    const token = jwt.sign(
+      { user: { id: newUser.id } },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    
+    res.json({
+      token,
+      user: {
+        id: newUser.id,
+        username: newUser.username,
+        email: newUser.email,
+        bio: newUser.bio || '',
+        avatar_url: newUser.avatar_url || '',
+        created_at: newUser.created_at
+      }
     });
   } catch (err) {
     console.error(err);
@@ -44,30 +60,40 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     
-    const user = await User.findOne({ email });
+    // Find user by email
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single();
+    
     if (!user) {
       return res.status(400).json({ msg: 'Invalid credentials' });
     }
     
-    const isMatch = await user.comparePassword(password);
+    // Verify password
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ msg: 'Invalid credentials' });
     }
     
-    const payload = { user: { id: user.id } };
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
+    // Create token
+    const token = jwt.sign(
+      { user: { id: user.id } },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
     
-    // Return token and user data
-    res.json({ 
-      token, 
-      user: { 
-        id: user.id, 
-        username: user.username, 
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
         email: user.email,
         bio: user.bio || '',
-        avatar: user.avatar || '',
-        createdAt: user.createdAt
-      } 
+        avatar_url: user.avatar_url || '',
+        created_at: user.created_at
+      }
     });
   } catch (err) {
     console.error(err);

@@ -1,23 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { localStorageAPI } from '../services/localStorageService';
 import { FiEdit2, FiTrash2, FiEye, FiLock, FiUnlock, FiPlusCircle } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
 function Dashboard() {
   const [blogs, setBlogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { token } = useAuth();
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchMyBlogs = async () => {
+      if (!user) return;
       try {
-        const res = await axios.get('http://localhost:5000/api/blogs/my-blogs', {
-          headers: { 'x-auth-token': token }
-        });
-        setBlogs(res.data);
+        const data = await localStorageAPI.getUserBlogs(user.id);
+        setBlogs(data);
       } catch (err) {
         toast.error('Error fetching blogs');
       } finally {
@@ -25,35 +24,18 @@ function Dashboard() {
       }
     };
     fetchMyBlogs();
-  }, [token]);
+  }, [user]);
 
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this blog?')) {
       try {
-        await axios.delete(`http://localhost:5000/api/blogs/${id}`, {
-          headers: { 'x-auth-token': token }
-        });
-        setBlogs(blogs.filter(blog => blog._id !== id));
+        await localStorageAPI.deleteBlog(id);
+        setBlogs(blogs.filter(blog => blog.id !== id));
         toast.success('Blog deleted successfully!');
       } catch (err) {
         toast.error('Error deleting blog');
       }
     }
-  };
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1
-      }
-    }
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0 }
   };
 
   if (loading) {
@@ -70,7 +52,10 @@ function Dashboard() {
       <div className="flex flex-col md:flex-row justify-between items-center mb-8">
         <div>
           <h1 className="text-4xl font-display font-bold mb-2 text-gray-900 dark:text-white">Your Dashboard</h1>
-          <p className="text-gray-600 dark:text-gray-400">Manage all your blog posts from one place</p>
+          <p className="text-gray-600 dark:text-gray-400">
+            Manage all your blog posts
+            <span className="ml-2 text-green-600 dark:text-green-400">(Local Storage Mode)</span>
+          </p>
         </div>
         <Link to="/create">
           <motion.button
@@ -115,16 +100,12 @@ function Dashboard() {
           </Link>
         </motion.div>
       ) : (
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="space-y-4"
-        >
+        <div className="space-y-4">
           {blogs.map(blog => (
             <motion.div
-              key={blog._id}
-              variants={itemVariants}
+              key={blog.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
               className="bg-white dark:bg-gray-800 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden"
             >
               <div className="p-6">
@@ -144,7 +125,7 @@ function Dashboard() {
                       </span>
                     </div>
                     
-                    <Link to={`/blog/${blog._id}`}>
+                    <Link to={`/blog/${blog.id}`}>
                       <h2 className="text-xl font-bold text-gray-800 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200 mb-2">
                         {blog.title}
                       </h2>
@@ -156,20 +137,20 @@ function Dashboard() {
                   </div>
                   
                   <div className="flex space-x-2 mt-4 md:mt-0">
-                    <Link to={`/blog/${blog._id}`}>
+                    <Link to={`/blog/${blog.id}`}>
                       <button className="flex items-center space-x-1 px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-all duration-200">
                         <FiEye className="w-4 h-4" />
                         <span>View</span>
                       </button>
                     </Link>
-                    <Link to={`/edit/${blog._id}`}>
+                    <Link to={`/edit/${blog.id}`}>
                       <button className="flex items-center space-x-1 px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 transition-all duration-200">
                         <FiEdit2 className="w-4 h-4" />
                         <span>Edit</span>
                       </button>
                     </Link>
                     <button
-                      onClick={() => handleDelete(blog._id)}
+                      onClick={() => handleDelete(blog.id)}
                       className="flex items-center space-x-1 px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-all duration-200"
                     >
                       <FiTrash2 className="w-4 h-4" />
@@ -180,7 +161,7 @@ function Dashboard() {
               </div>
             </motion.div>
           ))}
-        </motion.div>
+        </div>
       )}
     </div>
   );

@@ -1,128 +1,180 @@
 const router = require('express').Router();
-const jwt = require('jsonwebtoken');
 const auth = require('../middleware/auth');
-const Blog = require('../models/Blog');
+const supabase = require('../config/supabase');
 
-// Get all public blogs (no auth required)
+// Get all public blogs
 router.get('/public', async (req, res) => {
   try {
-    const blogs = await Blog.find({ isPublic: true })
-      .populate('author', 'username')
-      .sort({ createdAt: -1 });
-    res.json(blogs);
-  } catch (err) {
-    res.status(500).send('Server error');
-  }
-});
-
-// Get user's own blogs (public + private)
-router.get('/my-blogs', auth, async (req, res) => {
-  try {
-    const blogs = await Blog.find({ author: req.user.id })
-      .sort({ createdAt: -1 });
-    res.json(blogs);
-  } catch (err) {
-    res.status(500).send('Server error');
-  }
-});
-
-// Get a single blog (respects privacy)
-router.get('/:id', async (req, res) => {
-  try {
-    const blog = await Blog.findById(req.params.id).populate('author', 'username');
+    const { data: blogs, error } = await supabase
+      .from('blogs')
+      .select(`
+        *,
+        users:user_id (username)
+      `)
+      .eq('is_public', true)
+      .order('created_at', { ascending: false });
     
-    if (!blog) {
-      return res.status(404).json({ msg: 'Blog not found' });
-    }
+    if (error) throw error;
     
-    // Check privacy: if not public, only author can see
-    if (!blog.isPublic) {
-      const token = req.header('x-auth-token');
-      if (!token) {
-        return res.status(401).json({ msg: 'This blog is private' });
-      }
-      
-      try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        if (decoded.user.id !== blog.author._id.toString()) {
-          return res.status(401).json({ msg: 'This blog is private' });
-        }
-      } catch (err) {
-        return res.status(401).json({ msg: 'This blog is private' });
-      }
-    }
+    // Format response to match your frontend expectations
+    const formattedBlogs = blogs.map(blog => ({
+      _id: blog.id,
+      title: blog.title,
+      content: blog.content,
+      imageUrl: blog.image_url,
+      isPublic: blog.is_public,
+      author: blog.users,
+      createdAt: blog.created_at,
+      updatedAt: blog.updated_at
+    }));
     
-    res.json(blog);
-  } catch (err) {
-    res.status(500).send('Server error');
-  }
-});
-
-// Create a blog (requires auth)
-router.post('/', auth, async (req, res) => {
-  try {
-    const { title, content, imageUrl, isPublic } = req.body;
-    
-    const blog = new Blog({
-      title,
-      content,
-      imageUrl,
-      isPublic: isPublic !== undefined ? isPublic : true,
-      author: req.user.id
-    });
-    
-    await blog.save();
-    res.json(blog);
+    res.json(formattedBlogs);
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');
   }
 });
 
-// Update a blog (author only)
-router.put('/:id', auth, async (req, res) => {
+// Get user's own blogs
+router.get('/my-blogs', auth, async (req, res) => {
   try {
-    let blog = await Blog.findById(req.params.id);
+    const { data: blogs, error } = await supabase
+      .from('blogs')
+      .select('*')
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: false });
     
-    if (!blog) {
-      return res.status(404).json({ msg: 'Blog not found' });
-    }
+    if (error) throw error;
     
-    // Check ownership
-    if (blog.author.toString() !== req.user.id) {
-      return res.status(401).json({ msg: 'Not authorized' });
-    }
+    const formattedBlogs = blogs.map(blog => ({
+      _id: blog.id,
+      title: blog.title,
+      content: blog.content,
+      imageUrl: blog.image_url,
+      isPublic: blog.is_public,
+      createdAt: blog.created_at,
+      updatedAt: blog.updated_at
+    }));
     
-    const { title, content, imageUrl, isPublic } = req.body;
-    blog.title = title || blog.title;
-    blog.content = content || blog.content;
-    blog.imageUrl = imageUrl !== undefined ? imageUrl : blog.imageUrl;
-    blog.isPublic = isPublic !== undefined ? isPublic : blog.isPublic;
-    blog.updatedAt = Date.now();
-    
-    await blog.save();
-    res.json(blog);
+    res.json(formattedBlogs);
   } catch (err) {
+    console.error(err);
     res.status(500).send('Server error');
   }
 });
 
-// Delete a blog (author only)
-router.delete('/:id', auth, async (req, res) => {
+// Create a blog
+router.post('/', auth, async (req, res) => {
   try {
-    const blog = await Blog.findById(req.params.id);
+    const { title, content, imageUrl, isPublic } = req.body;
     
-    if (!blog) {
+    const { data: newBlog, error } = await supabase
+      .from('blogs')
+      .insert([{
+        user_id: req.user.id,
+        title,
+        content,
+        image_url: imageUrl,
+        is_public: isPublic !== undefined ? isPublic : true
+      }])
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    res.json({
+      _id: newBlog.id,
+      title: newBlog.title,
+      content: newBlog.content,
+      imageUrl: newBlog.image_url,
+      isPublic: newBlog.is_public,
+      createdAt: newBlog.created_at
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  }
+});
+
+// Update a blog
+router.put('/:id', auth, async (req, res) => {
+  try {
+    const { title, content, imageUrl, isPublic } = req.body;
+    const blogId = req.params.id;
+    
+    // Check ownership
+    const { data: existingBlog } = await supabase
+      .from('blogs')
+      .select('user_id')
+      .eq('id', blogId)
+      .single();
+    
+    if (!existingBlog) {
       return res.status(404).json({ msg: 'Blog not found' });
     }
     
-    if (blog.author.toString() !== req.user.id) {
+    if (existingBlog.user_id !== req.user.id) {
       return res.status(401).json({ msg: 'Not authorized' });
     }
     
-    await blog.deleteOne();
+    const { data: updatedBlog, error } = await supabase
+      .from('blogs')
+      .update({
+        title,
+        content,
+        image_url: imageUrl,
+        is_public: isPublic,
+        updated_at: new Date()
+      })
+      .eq('id', blogId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    res.json({
+      _id: updatedBlog.id,
+      title: updatedBlog.title,
+      content: updatedBlog.content,
+      imageUrl: updatedBlog.image_url,
+      isPublic: updatedBlog.is_public
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  }
+});
+
+// Delete a blog
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    const blogId = req.params.id;
+    
+    // Check ownership
+    const { data: existingBlog } = await supabase
+      .from('blogs')
+      .select('user_id')
+      .eq('id', blogId)
+      .single();
+    
+    if (!existingBlog) {
+      return res.status(404).json({ msg: 'Blog not found' });
+    }
+    
+    if (existingBlog.user_id !== req.user.id) {
+      return res.status(401).json({ msg: 'Not authorized' });
+    }
+    
+    const { error } = await supabase
+      .from('blogs')
+      .delete()
+      .eq('id', blogId);
+    
+    if (error) throw error;
+    
     res.json({ msg: 'Blog removed' });
   } catch (err) {
+    console.error(err);
     res.status(500).send('Server error');
   }
 });

@@ -1,23 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import axios from 'axios';
+import { localStorageAPI } from '../services/localStorageService';
 import BlogCard from '../components/BlogCard';
-import { FiSearch, FiTrendingUp, FiSun, FiMoon } from 'react-icons/fi';
-import { useTheme } from '../context/ThemeContext';
+import { FiSearch, FiTrendingUp, FiDatabase } from 'react-icons/fi';
 
 function Home() {
   const [blogs, setBlogs] = useState([]);
   const [filteredBlogs, setFilteredBlogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const { theme } = useTheme();
 
   useEffect(() => {
     const fetchPublicBlogs = async () => {
       try {
-        const res = await axios.get('http://localhost:5000/api/blogs/public');
-        setBlogs(res.data);
-        setFilteredBlogs(res.data);
+        const data = await localStorageAPI.getAllPublicBlogs();
+        setBlogs(data);
+        setFilteredBlogs(data);
       } catch (err) {
         console.error('Error fetching blogs:', err);
       } finally {
@@ -32,27 +30,13 @@ function Home() {
       const filtered = blogs.filter(blog => 
         blog.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         blog.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        blog.author?.username.toLowerCase().includes(searchTerm.toLowerCase())
+        blog.authorName?.toLowerCase().includes(searchTerm.toLowerCase())
       );
       setFilteredBlogs(filtered);
     } else {
       setFilteredBlogs(blogs);
     }
   }, [searchTerm, blogs]);
-
-  const fadeInUp = {
-    initial: { opacity: 0, y: 60 },
-    animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.6 }
-  };
-
-  const staggerChildren = {
-    animate: {
-      transition: {
-        staggerChildren: 0.1
-      }
-    }
-  };
 
   if (loading) {
     return (
@@ -78,6 +62,10 @@ function Home() {
         <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
           Discover amazing stories, insights, and ideas from writers around the world
         </p>
+        <div className="mt-4 inline-flex items-center gap-2 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 px-4 py-2 rounded-full text-sm">
+          <FiDatabase className="w-4 h-4" />
+          <span>Local Storage Mode - Your data stays in your browser!</span>
+        </div>
       </motion.div>
 
       {/* Search Bar */}
@@ -116,24 +104,25 @@ function Home() {
       {/* Blogs Grid */}
       {filteredBlogs.length === 0 ? (
         <motion.div
-          {...fadeInUp}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
           className="text-center py-12"
         >
-          <p className="text-gray-500 dark:text-gray-400 text-lg">No blogs found. Be the first to create one!</p>
+          <p className="text-gray-500 dark:text-gray-400 text-lg">No blogs found.</p>
         </motion.div>
       ) : (
-        <motion.div
-          variants={staggerChildren}
-          initial="initial"
-          animate="animate"
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
-        >
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredBlogs.map((blog) => (
-            <motion.div key={blog._id} variants={fadeInUp}>
+            <motion.div
+              key={blog.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+            >
               <BlogCard blog={blog} />
             </motion.div>
           ))}
-        </motion.div>
+        </div>
       )}
     </div>
   );

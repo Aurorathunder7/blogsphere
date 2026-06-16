@@ -1,15 +1,21 @@
 const router = require('express').Router();
 const auth = require('../middleware/auth');
-const User = require('../models/User');
 const bcrypt = require('bcryptjs');
+const supabase = require('../config/supabase');
 
 // Get current user info
 router.get('/me', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select('-password');
-    if (!user) {
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, username, email, bio, avatar_url, created_at')
+      .eq('id', req.user.id)
+      .single();
+    
+    if (error || !user) {
       return res.status(404).json({ msg: 'User not found' });
     }
+    
     res.json(user);
   } catch (err) {
     console.error(err);
@@ -20,71 +26,43 @@ router.get('/me', auth, async (req, res) => {
 // Update user profile
 router.put('/update', auth, async (req, res) => {
   try {
-    const { username, email, currentPassword, newPassword, bio, avatar } = req.body;
+    const { username, email, bio, currentPassword, newPassword } = req.body;
     
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ msg: 'User not found' });
-    }
-
-    // Update username if provided
-    if (username && username !== user.username) {
-      const existingUser = await User.findOne({ username });
-      if (existingUser) {
-        return res.status(400).json({ msg: 'Username already taken' });
-      }
-      user.username = username;
-    }
-
-    // Update email if provided
-    if (email && email !== user.email) {
-      const existingUser = await User.findOne({ email });
-      if (existingUser) {
-        return res.status(400).json({ msg: 'Email already registered' });
-      }
-      user.email = email;
-    }
-
-    // Update password if provided
+    const updateData = {};
+    if (username) updateData.username = username;
+    if (email) updateData.email = email;
+    if (bio !== undefined) updateData.bio = bio;
+    
+    // Handle password change
     if (currentPassword && newPassword) {
+      const { data: user } = await supabase
+        .from('users')
+        .select('password')
+        .eq('id', req.user.id)
+        .single();
+      
       const isMatch = await bcrypt.compare(currentPassword, user.password);
       if (!isMatch) {
         return res.status(400).json({ msg: 'Current password is incorrect' });
       }
-      user.password = newPassword;
+      
+      updateData.password = await bcrypt.hash(newPassword, 10);
     }
-
-    // Update bio if provided
-    if (bio !== undefined) {
-      user.bio = bio;
-    }
-
-    // Update avatar if provided
-    if (avatar !== undefined) {
-      user.avatar = avatar;
-    }
-
-    await user.save();
     
-    const userResponse = user.toObject();
-    delete userResponse.password;
+    updateData.updated_at = new Date();
     
-    res.json(userResponse);
+    const { data: updatedUser, error } = await supabase
+      .from('users')
+      .update(updateData)
+      .eq('id', req.user.id)
+      .select('id, username, email, bio, avatar_url, created_at')
+      .single();
+    
+    if (error) throw error;
+    
+    res.json(updatedUser);
   } catch (err) {
     console.error(err);
-    res.status(500).send('Server error');
-  }
-});
-
-// Get user by ID (for public profile viewing)
-router.get('/:id', async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id).select('-password');
-    if (!user) {
-      return res.status(404).json({ msg: 'User not found' });
-    }
-    res.json(user);
-  } catch (err) {
     res.status(500).send('Server error');
   }
 });

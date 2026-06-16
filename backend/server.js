@@ -30,6 +30,11 @@ app.get('/', (req, res) => {
   res.json({ message: 'Welcome to BlogSphere API' });
 });
 
+// Health check endpoint for Render - add this near your other route definitions
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'healthy', timestamp: new Date() });
+});
+
 // Connect to MongoDB
 const PORT = process.env.PORT || 5000;
 

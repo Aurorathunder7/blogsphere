@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { localStorageAPI } from '../services/localStorageService';
 import { FiCalendar, FiUser, FiEdit2, FiTrash2, FiArrowLeft, FiLock, FiUnlock } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 
 function BlogDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [blog, setBlog] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthor, setIsAuthor] = useState(false);
@@ -17,26 +17,23 @@ function BlogDetail() {
   useEffect(() => {
     const fetchBlog = async () => {
       try {
-        const headers = token ? { 'x-auth-token': token } : {};
-        const res = await axios.get(`http://localhost:5000/api/blogs/${id}`, { headers });
-        setBlog(res.data);
-        setIsAuthor(user && res.data.author._id === user.id);
+        const data = await localStorageAPI.getBlogById(id);
+        setBlog(data);
+        setIsAuthor(user && data.authorId === user.id);
       } catch (err) {
-        toast.error(err.response?.data?.msg || 'Error fetching blog');
+        toast.error('Error fetching blog');
         navigate('/');
       } finally {
         setLoading(false);
       }
     };
     fetchBlog();
-  }, [id, token, user, navigate]);
+  }, [id, user, navigate]);
 
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this blog?')) {
       try {
-        await axios.delete(`http://localhost:5000/api/blogs/${id}`, {
-          headers: { 'x-auth-token': token }
-        });
+        await localStorageAPI.deleteBlog(id);
         toast.success('Blog deleted successfully!');
         navigate('/dashboard');
       } catch (err) {
@@ -85,7 +82,7 @@ function BlogDetail() {
           {isAuthor && (
             <div className="flex space-x-2">
               <button
-                onClick={() => navigate(`/edit/${blog._id}`)}
+                onClick={() => navigate(`/edit/${blog.id}`)}
                 className="flex items-center space-x-1 px-3 py-1 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200"
               >
                 <FiEdit2 className="w-4 h-4" />
@@ -109,7 +106,7 @@ function BlogDetail() {
         <div className="flex items-center space-x-6 text-gray-600 dark:text-gray-400">
           <div className="flex items-center space-x-2">
             <FiUser className="w-5 h-5" />
-            <span className="font-medium">{blog.author?.username}</span>
+            <span className="font-medium">{blog.authorName}</span>
           </div>
           <div className="flex items-center space-x-2">
             <FiCalendar className="w-5 h-5" />

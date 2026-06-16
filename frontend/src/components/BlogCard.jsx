@@ -1,18 +1,14 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FiCalendar, FiUser, FiEye, FiHeart } from 'react-icons/fi';
+import { FiCalendar, FiUser } from 'react-icons/fi';
 
 function BlogCard({ blog }) {
-  const [isHovered, setIsHovered] = React.useState(false);
-
   return (
     <motion.div
       whileHover={{ y: -8 }}
       transition={{ duration: 0.3 }}
       className="group relative"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       <div className="bg-white dark:bg-gray-800 rounded-2xl overflow-hidden shadow-lg card-hover">
         {/* Image Section */}
@@ -44,7 +40,7 @@ function BlogCard({ blog }) {
 
         {/* Content Section */}
         <div className="p-6">
-          <Link to={`/blog/${blog._id}`}>
+          <Link to={`/blog/${blog.id}`}>
             <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-3 line-clamp-2 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200">
               {blog.title}
             </h2>
@@ -58,7 +54,7 @@ function BlogCard({ blog }) {
           <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-4">
             <div className="flex items-center space-x-2">
               <FiUser className="w-4 h-4" />
-              <span>{blog.author?.username || 'Anonymous'}</span>
+              <span>{blog.authorName || 'Anonymous'}</span>
             </div>
             <div className="flex items-center space-x-2">
               <FiCalendar className="w-4 h-4" />
@@ -67,7 +63,7 @@ function BlogCard({ blog }) {
           </div>
           
           {/* Read More Button */}
-          <Link to={`/blog/${blog._id}`}>
+          <Link to={`/blog/${blog.id}`}>
             <motion.button
               whileHover={{ x: 5 }}
               className="text-blue-600 dark:text-blue-400 font-semibold flex items-center space-x-1 group"
